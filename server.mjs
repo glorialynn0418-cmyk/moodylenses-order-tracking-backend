@@ -121,7 +121,13 @@ function assertConfigured() {
 }
 
 function isTrackingPath(pathname) {
-  return pathname === '/apps/order-tracking' || pathname === '/order-tracking';
+  return (
+    pathname === '/' ||
+    pathname === '/apps/order-tracking' ||
+    pathname.startsWith('/apps/order-tracking/') ||
+    pathname === '/order-tracking' ||
+    pathname.startsWith('/order-tracking/')
+  );
 }
 
 function normalizeShopDomain(domain) {
