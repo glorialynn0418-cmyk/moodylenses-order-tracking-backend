@@ -37,9 +37,7 @@ test('builds tracking response from fulfillments', () => {
   const response = buildTrackingResponse({
     id: 'gid://shopify/Order/1',
     name: '#1001',
-    customer: {
-      email: 'customer@example.com'
-    },
+    email: 'customer@example.com',
     createdAt: '2026-07-14T00:00:00Z',
     displayFulfillmentStatus: 'FULFILLED',
     fulfillments: [
