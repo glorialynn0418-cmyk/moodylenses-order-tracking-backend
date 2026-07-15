@@ -15,6 +15,9 @@ const ORDER_TRACKING_QUERY = `#graphql
         id
         name
         email
+        customer {
+          email
+        }
         createdAt
         displayFulfillmentStatus
         fulfillments(first: 10) {
@@ -97,6 +100,7 @@ if (process.env.NODE_ENV !== 'test') {
 export {
   ORDER_TRACKING_QUERY,
   buildOrderSearchQuery,
+  buildOrderSearchQueries,
   buildTrackingResponse,
   findOrderByNumberAndEmail,
   isTrackingPath,
@@ -132,9 +136,16 @@ function normalizeShopDomain(domain) {
 }
 
 function buildOrderSearchQuery(orderNumber) {
+  return buildOrderSearchQueries(orderNumber)[0];
+}
+
+function buildOrderSearchQueries(orderNumber) {
   const trimmed = String(orderNumber).trim();
-  const normalized = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
-  return `name:${escapeSearchValue(normalized)}`;
+  const candidates = trimmed.startsWith('#') || !/^\d+$/.test(trimmed)
+    ? [trimmed]
+    : [`#${trimmed}`, trimmed];
+
+  return candidates.map((candidate) => `name:${escapeSearchValue(candidate)}`);
 }
 
 function escapeSearchValue(value) {
@@ -142,12 +153,16 @@ function escapeSearchValue(value) {
 }
 
 async function findOrderByNumberAndEmail(orderNumber, email) {
-  const data = await shopifyGraphql(ORDER_TRACKING_QUERY, {
-    query: buildOrderSearchQuery(orderNumber)
-  });
+  for (const query of buildOrderSearchQueries(orderNumber)) {
+    const data = await shopifyGraphql(ORDER_TRACKING_QUERY, { query });
 
-  const orders = data?.orders?.nodes || [];
-  return orders.find((order) => String(order.email || '').toLowerCase() === email) || null;
+    const orders = data?.orders?.nodes || [];
+    const matchingOrder = orders.find((order) => orderMatchesEmail(order, email));
+
+    if (matchingOrder) return matchingOrder;
+  }
+
+  return null;
 }
 
 async function shopifyGraphql(query, variables) {
@@ -192,7 +207,7 @@ function buildTrackingResponse(order) {
       id: order.id,
       name: order.name,
       order_number: order.name,
-      email: order.email,
+      email: getOrderEmails(order)[0] || '',
       created_at: order.createdAt,
       status: order.displayFulfillmentStatus,
       fulfillment_status: order.displayFulfillmentStatus,
@@ -200,6 +215,19 @@ function buildTrackingResponse(order) {
     },
     tracking
   };
+}
+
+function orderMatchesEmail(order, email) {
+  return getOrderEmails(order).includes(String(email || '').toLowerCase());
+}
+
+function getOrderEmails(order) {
+  return [
+    order.email,
+    order.customer?.email
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).trim().toLowerCase());
 }
 
 function verifyAppProxySignature(requestUrl, secret) {
