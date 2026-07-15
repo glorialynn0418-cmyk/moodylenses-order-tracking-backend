@@ -15,9 +15,6 @@ const ORDER_TRACKING_QUERY = `#graphql
         id
         name
         email
-        customer {
-          email
-        }
         createdAt
         displayFulfillmentStatus
         fulfillments(first: 10) {
@@ -223,8 +220,7 @@ function orderMatchesEmail(order, email) {
 
 function getOrderEmails(order) {
   return [
-    order.email,
-    order.customer?.email
+    order.email
   ]
     .filter(Boolean)
     .map((value) => String(value).trim().toLowerCase());
