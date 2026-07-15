@@ -61,6 +61,30 @@ test('builds tracking response from fulfillments', () => {
   assert.equal(response.tracking[0].number, '1Z999');
 });
 
+test('adds an SF tracking URL when Shopify has no tracking URL', () => {
+  const response = buildTrackingResponse({
+    id: 'gid://shopify/Order/1',
+    name: '#100534',
+    email: 'customer@example.com',
+    createdAt: '2026-07-14T00:00:00Z',
+    displayFulfillmentStatus: 'FULFILLED',
+    fulfillments: [
+      {
+        status: 'SUCCESS',
+        trackingInfo: [
+          {
+            company: '',
+            number: 'SF6042665687957',
+            url: ''
+          }
+        ]
+      }
+    ]
+  });
+
+  assert.equal(response.tracking[0].url, 'https://www.sf-international.com/us/en/dynamic_function/waybill/#search/bill-number/SF6042665687957');
+});
+
 test('verifies app proxy signature', () => {
   const secret = 'secret';
   const message = 'path_prefix=/apps/order-trackingshop=rqxbft-fw.myshopify.comtimestamp=1783990000';
