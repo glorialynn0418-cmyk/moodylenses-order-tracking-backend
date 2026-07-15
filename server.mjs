@@ -7,6 +7,8 @@ const SHOPIFY_SHOP_DOMAIN = normalizeShopDomain(process.env.SHOPIFY_SHOP_DOMAIN 
 const SHOPIFY_ADMIN_ACCESS_TOKEN = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN || '';
 const SHOPIFY_APP_PROXY_SECRET = process.env.SHOPIFY_APP_PROXY_SECRET || '';
 const DISABLE_PROXY_SIGNATURE_CHECK = process.env.DISABLE_PROXY_SIGNATURE_CHECK === 'true';
+const ORDER_CACHE_TTL_MS = Number(process.env.ORDER_CACHE_TTL_SECONDS || 300) * 1000;
+const orderCache = new Map();
 
 const ORDER_TRACKING_QUERY = `#graphql
   query OrderTracking($query: String!) {
@@ -156,16 +158,41 @@ function escapeSearchValue(value) {
 }
 
 async function findOrderByNumberAndEmail(orderNumber, email) {
+  const cacheKey = `${String(orderNumber).trim().toLowerCase()}::${String(email).trim().toLowerCase()}`;
+  const cached = orderCache.get(cacheKey);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.order;
+  }
+
   for (const query of buildOrderSearchQueries(orderNumber)) {
     const data = await shopifyGraphql(ORDER_TRACKING_QUERY, { query });
 
     const orders = data?.orders?.nodes || [];
     const matchingOrder = orders.find((order) => orderMatchesEmail(order, email));
 
-    if (matchingOrder) return matchingOrder;
+    if (matchingOrder) {
+      setOrderCache(cacheKey, matchingOrder);
+      return matchingOrder;
+    }
   }
 
+  setOrderCache(cacheKey, null);
   return null;
+}
+
+function setOrderCache(cacheKey, order) {
+  if (ORDER_CACHE_TTL_MS <= 0) return;
+
+  orderCache.set(cacheKey, {
+    expiresAt: Date.now() + ORDER_CACHE_TTL_MS,
+    order
+  });
+
+  if (orderCache.size > 500) {
+    const [oldestKey] = orderCache.keys();
+    orderCache.delete(oldestKey);
+  }
 }
 
 async function shopifyGraphql(query, variables) {
@@ -198,7 +225,7 @@ function buildTrackingResponse(order) {
       tracking.push({
         company: info.company || '',
         number: info.number || '',
-        url: info.url || '',
+        url: info.url || buildTrackingUrl(info),
         fulfillment_status: fulfillment.status || ''
       });
     }
@@ -230,6 +257,19 @@ function getOrderEmails(order) {
   ]
     .filter(Boolean)
     .map((value) => String(value).trim().toLowerCase());
+}
+
+function buildTrackingUrl(info) {
+  const number = String(info.number || '').trim();
+  const company = String(info.company || '').trim().toLowerCase();
+
+  if (!number) return '';
+
+  if (company.includes('sf') || /^SF\d+/i.test(number)) {
+    return `https://www.sf-international.com/us/en/dynamic_function/waybill/#search/bill-number/${encodeURIComponent(number)}`;
+  }
+
+  return '';
 }
 
 function verifyAppProxySignature(requestUrl, secret) {
