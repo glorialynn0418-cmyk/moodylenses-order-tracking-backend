@@ -17,7 +17,9 @@ test('normalizes shop domains', () => {
 
 test('matches expected tracking paths', () => {
   assert.equal(isTrackingPath('/apps/order-tracking'), true);
+  assert.equal(isTrackingPath('/apps/order-tracking/'), true);
   assert.equal(isTrackingPath('/order-tracking'), true);
+  assert.equal(isTrackingPath('/'), true);
   assert.equal(isTrackingPath('/apps/other'), false);
 });
 
