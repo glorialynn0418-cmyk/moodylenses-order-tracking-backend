@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import {
   buildOrderSearchQuery,
+  buildOrderSearchQueries,
   buildTrackingResponse,
   isTrackingPath,
   normalizeShopDomain,
@@ -24,11 +25,21 @@ test('builds order search query from bare order number', () => {
   assert.equal(buildOrderSearchQuery('1001'), 'name:#1001');
 });
 
+test('also searches numeric order numbers without a hash fallback', () => {
+  assert.deepEqual(buildOrderSearchQueries('1001'), ['name:#1001', 'name:1001']);
+});
+
+test('does not prefix custom order names with a hash', () => {
+  assert.deepEqual(buildOrderSearchQueries('ML1001'), ['name:ML1001']);
+});
+
 test('builds tracking response from fulfillments', () => {
   const response = buildTrackingResponse({
     id: 'gid://shopify/Order/1',
     name: '#1001',
-    email: 'customer@example.com',
+    customer: {
+      email: 'customer@example.com'
+    },
     createdAt: '2026-07-14T00:00:00Z',
     displayFulfillmentStatus: 'FULFILLED',
     fulfillments: [
